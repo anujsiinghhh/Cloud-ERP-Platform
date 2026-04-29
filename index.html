@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>CloudERP | Faculty Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f4f7fa; }
+        .sidebar-blue { background: #001e3c; }
+        .white-card { background: white; border-radius: 1.5rem; border: 1px solid #e2e8f0; }
+        .dark-card { background: #0f172a; color: white; border-radius: 2rem; }
+        .row-p { background: #ecfdf5 !important; border-left: 5px solid #22c55e !important; }
+        .row-a { background: #fef2f2 !important; border-left: 5px solid #ef4444 !important; }
+        .transition-row { transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="text-slate-900 flex">
+
+    <aside class="w-64 h-screen sidebar-blue text-white fixed p-6 flex flex-col z-50">
+        <div class="mb-10 px-2 flex items-center gap-2">
+            <div class="w-8 h-8 bg-blue-500 rounded flex items-center justify-center font-black">GE</div>
+            <h1 class="text-xl font-black tracking-tighter italic">CloudERP</h1>
+        </div>
+        
+        <nav class="flex-1 space-y-2 font-bold text-sm">
+            <button onclick="showPage('dashboard')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-3">📊 Dashboard</button>
+            <button onclick="showPage('mark')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-3">🖊️ Mark Attendance</button>
+            <button onclick="showPage('live')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-3">📋 Live ERP Report</button>
+            <button onclick="showPage('enroll')" class="w-full text-left px-4 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-3">➕ Add Student</button>
+        </nav>
+
+        <div class="pt-5 border-t border-slate-700">
+            <p class="text-[10px] font-black text-blue-300 uppercase mb-3 italic">Prof. Nitin Sharma</p>
+            <button onclick="exportToExcel()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-black text-[10px] hover:bg-blue-700 transition">📥 EXCEL REPORT</button>
+        </div>
+    </aside>
+
+    <main class="ml-64 flex-1 p-10 min-h-screen">
+        <header class="flex justify-between items-end mb-10">
+            <div>
+                <h1 id="big-sub" class="text-5xl font-black text-slate-900 tracking-tighter">Dashboard</h1>
+                <p class="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Faculty Management System</p>
+            </div>
+            <div class="flex gap-4 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
+                <input type="date" id="att-date" onchange="render()" class="bg-transparent border-none px-2 text-sm font-bold outline-none">
+                <select id="sub-select" onchange="changeSub()" class="bg-transparent border-none px-2 text-sm font-black text-blue-600 outline-none cursor-pointer">
+                    <option>Networking</option><option>Java Programming</option><option>DSA</option><option>English Management</option>
+                </select>
+            </div>
+        </header>
+
+        <div id="app-root"></div>
+    </main>
+
+    <script>
+        document.getElementById('att-date').valueAsDate = new Date();
+        const subjects = ["Networking", "Java Programming", "DSA", "English Management"];
+        const subjectDetails = {
+            "Networking": "Prof. Amit Singh",
+            "Java Programming": "Dr. Kavita Rao",
+            "DSA": "Er. Nitin Sharma",
+            "English Management": "Ms. Sneha Rawat"
+        };
+
+        const defaultStudents = [
+            { id: "245951", name: "Aryan Negi" }, { id: "245952", name: "Sneha Rawat" },
+            { id: "245953", name: "Rahul Bisht" }, { id: "245954", name: "Priya Sharma" },
+            { id: "245955", name: "Amit Verma" }, { id: "245956", name: "Suman Joshi" },
+            { id: "245957", name: "Vikram Singh" }, { id: "245958", name: "Kavita Devi" },
+            { id: "245959", name: "Rohan Das" }, { id: "245960", name: "Anjali Bhatt" }
+        ].map(s => {
+            let att = {};
+            subjects.forEach(sub => { 
+                let t = Math.floor(Math.random() * 5) + 30;
+                let p = Math.floor(Math.random() * (t - 15)) + 15;
+                att[sub] = { total: t, present: p, history: {} }; 
+            });
+            return { ...s, attendance: att };
+        });
+
+        let students = JSON.parse(localStorage.getItem("erp_final_mixed")) || defaultStudents;
+        let currentSub = "Networking";
+        let currentPage = 'dashboard';
+
+        function sync() { localStorage.setItem("erp_final_mixed", JSON.stringify(students)); }
+        function changeSub() { currentSub = document.getElementById('sub-select').value; render(); }
+        function showPage(page) { currentPage = page; render(); }
+
+        function render() {
+            const root = document.getElementById('app-root');
+            const date = document.getElementById('att-date').value;
+
+            if(currentPage === 'dashboard') {
+                document.getElementById('big-sub').innerText = "Dashboard";
+                root.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    ${subjects.map(sub => `
+                    <div class="white-card p-6 shadow-sm hover:shadow-xl transition cursor-pointer group" onclick="currentSub='${sub}'; document.getElementById('sub-select').value='${sub}'; showPage('mark')">
+                        <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-bold mb-4 group-hover:bg-blue-600 group-hover:text-white transition">${sub[0]}</div>
+                        <h3 class="text-base font-black text-slate-800">${sub}</h3>
+                        <p class="text-xs font-bold text-blue-500 mt-1">${subjectDetails[sub]}</p>
+                    </div>`).join('')}
+                </div>`;
+            }
+
+            if(currentPage === 'mark') {
+                document.getElementById('big-sub').innerText = currentSub;
+                root.innerHTML = `
+                <div class="white-card overflow-hidden shadow-xl border-none">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase">
+                            <tr><th class="p-5 w-32 text-center">ID</th><th class="p-5">Student Name</th><th class="p-5 text-center">Action</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${students.map((s, i) => {
+                                let status = s.attendance[currentSub].history[date];
+                                let rowClass = status === 'P' ? 'row-p' : (status === 'A' ? 'row-a' : 'hover:bg-slate-50');
+                                return `<tr class="transition-row ${rowClass}">
+                                    <td class="p-5 text-center font-mono font-bold text-slate-400">${s.id}</td>
+                                    <td class="p-5 font-black text-slate-800 text-base">${s.name}</td>
+                                    <td class="p-5 text-center">
+                                        <button onclick="markAt(${i}, true)" class="w-12 py-2 rounded-lg font-black text-[10px] transition ${status === 'P' ? 'bg-green-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}">P</button>
+                                        <button onclick="markAt(${i}, false)" class="w-12 py-2 rounded-lg font-black text-[10px] transition ${status === 'A' ? 'bg-red-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}">A</button>
+                                    </td>
+                                </tr>`}).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            if(currentPage === 'live') {
+                document.getElementById('big-sub').innerText = "Live Report";
+                root.innerHTML = `
+                <div class="dark-card p-4 shadow-2xl overflow-hidden border border-slate-700">
+                    <table class="w-full text-left">
+                        <thead class="text-[9px] font-black text-slate-500 uppercase border-b border-slate-800">
+                            <tr><th class="p-5">Roll No</th><th class="p-5">Student Name</th><th class="p-5 text-center">Present</th><th class="p-5 text-center">Total</th><th class="p-5 text-right">Status (%)</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            ${students.map((s, i) => {
+                                let sub = s.attendance[currentSub];
+                                let perc = sub.total > 0 ? ((sub.present/sub.total)*100).toFixed(1) : "0.0";
+                                return `<tr class="hover:bg-white/5 cursor-pointer transition" onclick="viewDetail(${i})">
+                                    <td class="p-5 font-mono text-slate-500 text-[11px]">${s.id}</td>
+                                    <td class="p-5 font-black text-slate-200 text-base">${s.name}</td>
+                                    <td class="p-5 text-center font-bold text-blue-400">${sub.present}</td>
+                                    <td class="p-5 text-center font-bold text-slate-500">${sub.total}</td>
+                                    <td class="p-5 text-right font-black text-xl ${perc < 75 ? 'text-red-500' : 'text-emerald-400'}">${perc}%</td>
+                                </tr>`}).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            if(currentPage === 'enroll') {
+                document.getElementById('big-sub').innerText = "Add Student";
+                root.innerHTML = `<div class="white-card p-12 max-w-md mx-auto text-center mt-10 shadow-2xl border-none">
+                    <h3 class="font-black text-slate-800 mb-8 text-2xl">New Enrollment</h3>
+                    <input id="n-name" class="w-full p-4 bg-slate-50 rounded-2xl mb-4 font-bold outline-none border focus:border-blue-500" placeholder="Student Name">
+                    <input id="n-id" class="w-full p-4 bg-slate-50 rounded-2xl mb-8 font-bold outline-none border focus:border-blue-500" placeholder="Roll No">
+                    <button onclick="enroll()" class="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase text-xs shadow-xl hover:bg-blue-600 transition">Register</button>
+                </div>`;
+            }
+        }
+
+        function markAt(i, isP) {
+            const date = document.getElementById('att-date').value;
+            let sub = students[i].attendance[currentSub];
+            if(!sub.history[date]) { sub.total++; if(isP) sub.present++; }
+            else if (sub.history[date] === 'A' && isP) { sub.present++; }
+            else if (sub.history[date] === 'P' && !isP) { sub.present--; }
+            sub.history[date] = isP ? 'P' : 'A';
+            sync(); render();
+        }
+
+        function viewDetail(index) {
+            const s = students[index];
+            let totalLectures = 0;
+            let totalAttended = 0;
+
+            let rows = subjects.map(sub => {
+                let d = s.attendance[sub];
+                let p = d.total > 0 ? ((d.present/d.total)*100).toFixed(1) : "0.0";
+                totalLectures += d.total;
+                totalAttended += d.present;
+                return `<tr class="border-b border-slate-800">
+                    <td class="py-4 text-[10px] font-black text-blue-400 uppercase tracking-widest">${sub}</td>
+                    <td class="py-4 text-center text-slate-400 font-bold">${d.total}</td>
+                    <td class="py-4 text-center text-white font-bold">${d.present}</td>
+                    <td class="py-4 text-right font-black ${p < 75 ? 'text-red-500' : 'text-emerald-400'}">${p}%</td>
+                </tr>`;
+            }).join("");
+            
+            let aggregate = totalLectures > 0 ? ((totalAttended/totalLectures)*100).toFixed(1) : "0.0";
+            
+            Swal.fire({ 
+                html: `
+                    <div class="text-left mb-6">
+                        <h2 class="text-2xl font-black text-white italic tracking-tighter">${s.name}</h2>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Roll Number: ${s.id}</p>
+                    </div>
+                    <table class="w-full mb-8">
+                        <thead class="text-[8px] font-black text-slate-500 uppercase text-left border-b border-slate-800">
+                            <tr><th class="pb-2">Subject</th><th class="pb-2 text-center">Total Lect</th><th class="pb-2 text-center">Attended</th><th class="pb-2 text-right">Percent</th></tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    <div class="p-5 bg-blue-600 rounded-2xl text-white flex justify-between items-center shadow-xl">
+                        <span class="text-[10px] font-black uppercase tracking-widest">Aggregate Score</span>
+                        <span class="text-2xl font-black italic">${aggregate}%</span>
+                    </div>`,
+                showConfirmButton: false, 
+                customClass: { popup: 'rounded-[2.5rem] bg-[#001e3c] text-white border border-slate-800 p-10' }
+            });
+        }
+
+        function enroll() {
+            let n = document.getElementById('n-name').value; let id = document.getElementById('n-id').value;
+            if(n && id) {
+                let att = {}; subjects.forEach(sub => { 
+                    att[sub] = { total: 0, present: 0, history: {} } 
+                });
+                students.push({ id, name: n, attendance: att }); sync(); showPage('live');
+            }
+        }
+
+        function exportToExcel() {
+            let data = students.map(s => ({ "ID": s.id, "Name": s.name, "Subject": currentSub, "Present": s.attendance[currentSub].present, "Total": s.attendance[currentSub].total, "Percentage": ((s.attendance[currentSub].present/s.attendance[currentSub].total)*100 || 0).toFixed(2) + "%" }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            book_append_sheet(wb, ws, "Attendance");
+            XLSX.writeFile(wb, `GEU_FacultySystem_Report.xlsx`);
+        }
+        
+        render();
+    </script>
+</body>
+</html>
